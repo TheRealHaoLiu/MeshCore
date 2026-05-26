@@ -9,6 +9,16 @@
 #include <helpers/AutoDiscoverRTCClock.h>
 #include <helpers/SensorManager.h>
 
+#ifdef DISPLAY_CLASS
+  #include <helpers/ui/SSD1306SPIDisplay.h>
+  extern DISPLAY_CLASS display;
+#endif
+
+#if defined(P_LORA_SCLK)
+  extern SPIClass spi;
+  extern bool spi_initialized;
+#endif
+
 extern UnitC6LBoard board;
 extern WRAPPER_CLASS radio_driver;
 extern AutoDiscoverRTCClock rtc_clock;
