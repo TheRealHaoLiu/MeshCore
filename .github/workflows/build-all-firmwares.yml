@@ -1,0 +1,53 @@
+name: Build All Firmwares
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main-m5stack-unit-c6l
+    tags:
+      - 'all-*'
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Clone Repo
+        uses: actions/checkout@v4
+
+      - name: Setup Build Environment
+        uses: ./.github/actions/setup-build-environment
+
+      - name: Set FIRMWARE_VERSION for tag push
+        if: github.ref_type == 'tag'
+        run: |
+          GIT_TAG_NAME="${GITHUB_REF#refs/tags/}"
+          echo "FIRMWARE_VERSION=${GIT_TAG_NAME##*-}" >> $GITHUB_ENV
+
+      - name: Set FIRMWARE_VERSION for branch push
+        if: github.ref_type != 'tag'
+        run: |
+          echo "FIRMWARE_VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: Build All Firmwares
+        run: /usr/bin/env bash build.sh build-firmwares
+
+      - name: Upload Workflow Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-firmwares
+          path: out
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: All Firmwares ${{ env.FIRMWARE_VERSION }}
+          body: ""
+          draft: true
+          files: out/*

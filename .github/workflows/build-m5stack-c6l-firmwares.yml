@@ -1,0 +1,69 @@
+name: Build M5Stack C6L Firmwares
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main-m5stack-unit-c6l
+    tags:
+      - 'c6l-v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-build-environment
+
+      - name: Set FIRMWARE_VERSION for tag push
+        if: github.ref_type == 'tag'
+        run: |
+          GIT_TAG_NAME="${GITHUB_REF#refs/tags/}"
+          echo "FIRMWARE_VERSION=${GIT_TAG_NAME##*-}" >> $GITHUB_ENV
+
+      - name: Set FIRMWARE_VERSION for branch push
+        if: github.ref_type != 'tag'
+        run: |
+          echo "FIRMWARE_VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: Build all C6L firmwares
+        run: |
+          mkdir -p out
+          for env in m5stack_unit_c6l_companion_radio_usb m5stack_unit_c6l_companion_radio_ble m5stack_unit_c6l_repeater m5stack_unit_c6l_room_server
+          do
+            echo "=== Building $env ==="
+            pio run -e "$env"
+
+            # Run mergebin to generate bootloader, partitions, and merged binary
+            pio run -t mergebin -e "$env"
+
+            # Copy individual files
+            cp .pio/build/"$env"/firmware.bin out/"$env"_0x10000.bin
+            cp .pio/build/"$env"/bootloader.bin out/"$env"_bootloader_0x0.bin
+            cp .pio/build/"$env"/partitions.bin out/"$env"_partitions_0x8000.bin
+
+            # Copy the merged binary produced by platformio (uses --chip esp32c6 correctly)
+            cp .pio/build/"$env"/firmware-merged.bin out/"$env"-"$FIRMWARE_VERSION"-merged.bin
+          done
+
+      - name: List artifacts
+        run: ls -la out/
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: m5stack-c6l-firmwares
+          path: out/*.bin
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref_type == 'tag'
+        with:
+          name: M5Stack C6L Firmware ${{ env.FIRMWARE_VERSION }}
+          body: ""
+          draft: true
+          files: out/*.bin
